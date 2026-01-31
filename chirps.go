@@ -4,30 +4,39 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"slices"
+	"strings"
 )
 
+type parameters struct {
+	Body string `json:"body"`
+}
+
 func chirpHandler(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
-		respondWithError(w, 500, "Something went wrong")
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
 
-	if len(params.Body) > 140 {
-		respondWithError(w, 400, "Chirp is too long")
+	const maxChirpLen = 140
+	if len(params.Body) > maxChirpLen {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
 		return
 	}
+
+	cleanUpBadWords(&params)
 	type validateResp struct {
-		Valid bool `json:"valid"`
+		CleanedBody string `json:"cleaned_body"`
 	}
-	respondWithJSON(w, 200, validateResp{Valid: true})
+
+	resp := validateResp{
+		CleanedBody: params.Body,
+	}
+	respondWithJSON(w, http.StatusOK, resp)
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -61,5 +70,17 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(dat)
+}
 
+func cleanUpBadWords(params *parameters) {
+	badWords := []string{"kerfuffle", "sharbert", "fornax"}
+	wordsToCheck := params.Body
+	words := strings.Split(wordsToCheck, " ")
+	for i, word := range words {
+		if slices.Contains(badWords, strings.ToLower(word)) {
+			words[i] = "****"
+		}
+	}
+	wordsToCheck = strings.Join(words, " ")
+	params.Body = wordsToCheck
 }

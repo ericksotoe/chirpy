@@ -1,13 +1,31 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+	"time"
+
+	"github.com/ericksotoe/chirp/internal/database"
+	"github.com/google/uuid"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
 type apiConfig struct {
+	db             *database.Queries
 	fileserverHits atomic.Int32
+	dev            string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -29,8 +47,23 @@ func (cfg *apiConfig) requestCountHandler(w http.ResponseWriter, r *http.Request
 }
 
 func main() {
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	isDev := os.Getenv("PLATFORM")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+	dbConnection, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		fmt.Printf("Error opening the database %v", err)
+		os.Exit(1)
+	}
+
+	dbQ := database.New(dbConnection)
 	apiCfg := apiConfig{
+		db:             dbQ,
 		fileserverHits: atomic.Int32{},
+		dev:            isDev,
 	}
 
 	mux := http.NewServeMux()
@@ -39,6 +72,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", readinessHandler)
 	mux.HandleFunc("POST /admin/reset", apiCfg.requestResetHandler)
 	mux.HandleFunc("POST /api/validate_chirp", chirpHandler)
+	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
 
 	server := &http.Server{
 		Addr:    ":8080",
