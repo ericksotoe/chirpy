@@ -1,24 +1,43 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/ericksotoe/chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 type parameters struct {
-	Body string `json:"body"`
+	Body   string `json:"body"`
+	UserId string `json:"user_id"`
 }
 
-func chirpHandler(w http.ResponseWriter, r *http.Request) {
+type ChirpResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	if params.Body == "" || params.UserId == "" {
+		respondWithError(w, http.StatusBadRequest, "userid or body was left empty")
 		return
 	}
 
@@ -29,14 +48,27 @@ func chirpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cleanUpBadWords(&params)
-	type validateResp struct {
-		CleanedBody string `json:"cleaned_body"`
+	parsedID, err := uuid.Parse(params.UserId)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong when parsing string to uuid")
+		return
 	}
+	chirpParams := database.CreateChirpParams{
+		Body:   params.Body,
+		UserID: parsedID}
 
-	resp := validateResp{
-		CleanedBody: params.Body,
+	chirp, err := cfg.db.CreateChirp(context.Background(), chirpParams)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong when creating chirp")
+		return
 	}
-	respondWithJSON(w, http.StatusOK, resp)
+	respondWithJSON(w, http.StatusCreated, ChirpResponse{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	})
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {

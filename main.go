@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ericksotoe/chirp/internal/database"
+	"github.com/ericksotoe/chirpy/internal/database"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -48,8 +48,9 @@ func (cfg *apiConfig) requestCountHandler(w http.ResponseWriter, r *http.Request
 
 func main() {
 	godotenv.Load()
-	dbURL := os.Getenv("DB_URL")
 	isDev := os.Getenv("PLATFORM")
+	dbURL := os.Getenv("DB_URL")
+
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
 	}
@@ -71,8 +72,8 @@ func main() {
 	mux.HandleFunc("GET /admin/metrics", apiCfg.requestCountHandler)
 	mux.HandleFunc("GET /api/healthz", readinessHandler)
 	mux.HandleFunc("POST /admin/reset", apiCfg.requestResetHandler)
-	mux.HandleFunc("POST /api/validate_chirp", chirpHandler)
 	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
+	mux.HandleFunc("POST /api/chirps", apiCfg.createChirpHandler)
 
 	server := &http.Server{
 		Addr:    ":8080",

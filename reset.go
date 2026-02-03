@@ -10,7 +10,7 @@ func (cfg *apiConfig) requestResetHandler(w http.ResponseWriter, r *http.Request
 	if cfg.dev == "dev" {
 		err := cfg.db.ResetUsers(context.Background())
 		if err != nil {
-			respondWithError(w, http.StatusForbidden, "Can't reset the db with your permissions")
+			respondWithError(w, http.StatusForbidden, err.Error())
 			return
 		}
 	}
