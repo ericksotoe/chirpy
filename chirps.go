@@ -26,6 +26,10 @@ type ChirpResponse struct {
 	UserID    uuid.UUID `json:"user_id"`
 }
 
+type SliceChirpResponse struct {
+	SliceChirp []ChirpResponse
+}
+
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
@@ -115,4 +119,22 @@ func cleanUpBadWords(params *parameters) {
 	}
 	wordsToCheck = strings.Join(words, " ")
 	params.Body = wordsToCheck
+}
+
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	chirpSlice, err := cfg.db.GetChirps(context.Background())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something wrong happened when retrieving all the chirps from db")
+		return
+	}
+	chirpResponseSlice := []ChirpResponse{}
+	for _, chirp := range chirpSlice {
+		chirpResponseSlice = append(chirpResponseSlice, ChirpResponse{ID: chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID})
+	}
+
+	respondWithJSON(w, http.StatusOK, chirpResponseSlice)
 }
