@@ -26,6 +26,7 @@ type apiConfig struct {
 	db             *database.Queries
 	fileserverHits atomic.Int32
 	dev            string
+	secret         string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -50,6 +51,7 @@ func main() {
 	godotenv.Load()
 	isDev := os.Getenv("PLATFORM")
 	dbURL := os.Getenv("DB_URL")
+	jwtSecret := os.Getenv("SECRET")
 
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
@@ -59,12 +61,16 @@ func main() {
 		fmt.Printf("Error opening the database %v", err)
 		os.Exit(1)
 	}
+	if jwtSecret == "" {
+		log.Fatal("Error finding the JWT Secret")
+	}
 
 	dbQ := database.New(dbConnection)
 	apiCfg := apiConfig{
 		db:             dbQ,
 		fileserverHits: atomic.Int32{},
 		dev:            isDev,
+		secret:         jwtSecret,
 	}
 
 	mux := http.NewServeMux()

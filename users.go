@@ -4,14 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/ericksotoe/chirpy/internal/auth"
 	"github.com/ericksotoe/chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
+type UserWithToken struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
+}
+
 type emailAndPassword struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -80,11 +91,25 @@ func (cfg *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addedUser := User{
+	expires := userEmailAndPassword.ExpiresInSeconds
+	if expires == 0 {
+		expires = 3600
+	} else if expires > 3600 {
+		expires = 3600
+	}
+
+	duration := time.Duration(expires) * time.Second
+	token, err := auth.MakeJWT(user.ID, cfg.secret, duration)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+	}
+
+	addedUser := UserWithToken{
 		ID:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email}
+		Email:     user.Email,
+		Token:     token}
 
 	respondWithJSON(w, http.StatusOK, addedUser)
 }

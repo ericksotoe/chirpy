@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ericksotoe/chirpy/internal/auth"
 	"github.com/ericksotoe/chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
 type parameters struct {
-	Body   string `json:"body"`
-	UserId string `json:"user_id"`
+	Body string `json:"body"`
 }
 
 type ChirpResponse struct {
@@ -40,7 +40,19 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if params.Body == "" || params.UserId == "" {
+	unverifiedToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userID, err := auth.ValidateJWT(unverifiedToken, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	if params.Body == "" || userID == uuid.Nil {
 		respondWithError(w, http.StatusBadRequest, "userid or body was left empty")
 		return
 	}
@@ -52,14 +64,10 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	cleanUpBadWords(&params)
-	parsedID, err := uuid.Parse(params.UserId)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong when parsing string to uuid")
-		return
-	}
+
 	chirpParams := database.CreateChirpParams{
 		Body:   params.Body,
-		UserID: parsedID}
+		UserID: userID}
 
 	chirp, err := cfg.db.CreateChirp(context.Background(), chirpParams)
 	if err != nil {
