@@ -83,6 +83,9 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
 	mux.HandleFunc("POST /api/chirps", apiCfg.createChirpHandler)
 	mux.HandleFunc("POST /api/login", apiCfg.loginUserHandler)
+	mux.HandleFunc("POST /api/refresh", apiCfg.refreshTokenHandler)
+	mux.HandleFunc("POST /api/revoke", apiCfg.revokeTokenHandler)
+	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
 
 	server := &http.Server{
 		Addr:    ":8080",

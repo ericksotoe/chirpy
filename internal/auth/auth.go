@@ -91,8 +91,13 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return "", errors.New("The header has no Authorization parameter")
 	}
 
-	wordToStrip := "Bearer"
-	strippedTokenString := strings.ReplaceAll(tokenString, wordToStrip, "")
+	wordToStrip := "Bearer "
+	hasPrefix := strings.HasPrefix(tokenString, wordToStrip)
+	if !hasPrefix {
+		return "", errors.New("The Authorization header has no Bearer")
+	}
+
+	strippedTokenString := strings.TrimPrefix(tokenString, wordToStrip)
 	strippedTokenString = strings.TrimSpace(strippedTokenString)
 
 	return strippedTokenString, nil
@@ -100,7 +105,10 @@ func GetBearerToken(headers http.Header) (string, error) {
 
 func MakeRefreshToken() (string, error) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, err := rand.Read(key)
+	if err != nil {
+		return "", err
+	}
 	encodedString := hex.EncodeToString(key)
 	return encodedString, nil
 }
