@@ -168,3 +168,78 @@ func (cfg *apiConfig) getChirpsByIDHandler(w http.ResponseWriter, r *http.Reques
 		UserID:    chirp.UserID,
 	})
 }
+
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Access token is malformed or missing")
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "malformed / bad signature / expired token")
+		return
+	}
+
+	chirpIDString := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(chirpIDString)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid chirp Id")
+		return
+	}
+
+	ctx := context.Background()
+	chirp, err := cfg.db.GetChirpsByID(ctx, chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Something went wrong when retrieving the chirp by id (it might not exist)")
+		return
+	}
+
+	if chirp.UserID != userID {
+		respondWithError(w, http.StatusForbidden, "Chirps can only be deleted by their creators")
+		return
+	}
+
+	err = cfg.db.DeleteChirpsByID(ctx, chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error deleting the users chirp")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type UpgradeEvent struct {
+	Event string `json:"event"`
+	Data  struct {
+		UserID string `json:"user_id"`
+	} `json:"data"`
+}
+
+func (cfg *apiConfig) addChirpyRedHandler(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	params := UpgradeEvent{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	userID, err := uuid.Parse(params.Data.UserID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error chaning the string userid to a uuid")
+		return
+	}
+
+	_, err = cfg.db.UpgradeToChirpyRed(context.Background(), userID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

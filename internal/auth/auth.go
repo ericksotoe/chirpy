@@ -112,3 +112,7 @@ func MakeRefreshToken() (string, error) {
 	encodedString := hex.EncodeToString(key)
 	return encodedString, nil
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+
+}

@@ -16,10 +16,11 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 type apiConfig struct {
@@ -27,6 +28,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	dev            string
 	secret         string
+	polkaApiKey    string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -52,6 +54,7 @@ func main() {
 	isDev := os.Getenv("PLATFORM")
 	dbURL := os.Getenv("DB_URL")
 	jwtSecret := os.Getenv("SECRET")
+	polkaKey := os.Getenv("POLKA_KEY")
 
 	if dbURL == "" {
 		log.Fatal("DB_URL must be set")
@@ -62,7 +65,10 @@ func main() {
 		os.Exit(1)
 	}
 	if jwtSecret == "" {
-		log.Fatal("Error finding the JWT Secret")
+		log.Fatal("Error: JWT Secret not found")
+	}
+	if polkaKey == "" {
+		log.Fatal("Error: Polka api key not found ")
 	}
 
 	dbQ := database.New(dbConnection)
@@ -71,6 +77,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		dev:            isDev,
 		secret:         jwtSecret,
+		polkaApiKey:    polkaKey,
 	}
 
 	mux := http.NewServeMux()
@@ -85,7 +92,9 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.loginUserHandler)
 	mux.HandleFunc("POST /api/refresh", apiCfg.refreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", apiCfg.revokeTokenHandler)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.addChirpyRedHandler)
 	mux.HandleFunc("PUT /api/users", apiCfg.updateUserHandler)
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirpHandler)
 
 	server := &http.Server{
 		Addr:    ":8080",

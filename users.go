@@ -18,6 +18,7 @@ type UserWithToken struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 }
 
 type emailAndPassword struct {
@@ -30,10 +31,11 @@ type responseToken struct {
 }
 
 type UserResponse struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,10 +61,12 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	addedUser := User{ID: user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email}
+	addedUser := User{
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed}
 
 	res, err := json.Marshal(addedUser)
 	if err != nil {
@@ -131,6 +135,7 @@ func (cfg *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:    user.CreatedAt,
 		UpdatedAt:    user.UpdatedAt,
 		Email:        user.Email,
+		IsChirpyRed:  user.IsChirpyRed,
 		Token:        token,
 		RefreshToken: refreshToken}
 
@@ -219,10 +224,11 @@ func (cfg *apiConfig) updateUserHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := UserResponse{
-		ID:        responseUser.ID,
-		CreatedAt: responseUser.CreatedAt,
-		UpdatedAt: responseUser.UpdatedAt,
-		Email:     responseUser.Email,
+		ID:          responseUser.ID,
+		CreatedAt:   responseUser.CreatedAt,
+		UpdatedAt:   responseUser.UpdatedAt,
+		Email:       responseUser.Email,
+		IsChirpyRed: responseUser.IsChirpyRed,
 	}
 
 	respondWithJSON(w, http.StatusOK, response)
