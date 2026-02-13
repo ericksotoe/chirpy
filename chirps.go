@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,21 +131,51 @@ func cleanUpBadWords(params *parameters) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	chirpSlice, err := cfg.db.GetChirps(context.Background())
+
+	dbChirps, err := cfg.db.GetChirps(r.Context())
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something wrong happened when retrieving all the chirps from db")
+		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirps")
 		return
 	}
-	chirpResponseSlice := []ChirpResponse{}
-	for _, chirp := range chirpSlice {
-		chirpResponseSlice = append(chirpResponseSlice, ChirpResponse{ID: chirp.ID,
-			CreatedAt: chirp.CreatedAt,
-			UpdatedAt: chirp.UpdatedAt,
-			Body:      chirp.Body,
-			UserID:    chirp.UserID})
+
+	authorID := uuid.Nil
+	authorIDString := r.URL.Query().Get("author_id")
+	if authorIDString != "" {
+		authorID, err = uuid.Parse(authorIDString)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid author ID")
+			return
+		}
 	}
 
-	respondWithJSON(w, http.StatusOK, chirpResponseSlice)
+	sortOrder := r.URL.Query().Get("sort")
+
+	chirps := []ChirpResponse{}
+	for _, dbChirp := range dbChirps {
+		if authorID != uuid.Nil && dbChirp.UserID != authorID {
+			continue
+		}
+
+		chirps = append(chirps, ChirpResponse{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			UserID:    dbChirp.UserID,
+			Body:      dbChirp.Body,
+		})
+	}
+
+	if sortOrder == "desc" {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		})
+	} else {
+		sort.Slice(chirps, func(i, j int) bool {
+			return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, chirps)
 }
 
 func (cfg *apiConfig) getChirpsByIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -218,9 +249,20 @@ type UpgradeEvent struct {
 }
 
 func (cfg *apiConfig) addChirpyRedHandler(w http.ResponseWriter, r *http.Request) {
+	api, err := auth.GetBearerApi(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Api Key is malformed or missing")
+		return
+	}
+
+	if api != cfg.polkaApiKey {
+		respondWithError(w, http.StatusUnauthorized, "malformed / bad signature / expired api key")
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	params := UpgradeEvent{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
